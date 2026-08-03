@@ -6,7 +6,7 @@
     <a href="https://github.com/jckling/Daily-Bonus/issues"><img src="https://img.shields.io/github/issues/jckling/Daily-Bonus" alt="GitHub issues"></a>
 </p>
 
-自动签到脚本，通过 GitHub Actions 定时执行，支持 Telegram 推送签到结果。-
+自动签到脚本，通过 GitHub Actions 定时执行，支持 Telegram 推送签到结果。
 
 > 如果觉得有用，右上角点个 ⭐ Star 支持一下，感谢！
 
