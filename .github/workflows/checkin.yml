@@ -6,38 +6,79 @@ on:
   workflow_dispatch:
 
 jobs:
-  checkin:
+  check-and-run:
     runs-on: ubuntu-latest
-
-    env:
-      V2EX_COOKIES: ${{ secrets.V2EX_COOKIES }}
-      BILIBILI_COOKIES: ${{ secrets.BILIBILI_COOKIES }}
-      YAMIBO_COOKIES: ${{ secrets.YAMIBO_COOKIES }}
-      YURIFANS_EMAIL: ${{ secrets.YURIFANS_EMAIL }}
-      YURIFANS_PASSWORD: ${{ secrets.YURIFANS_PASSWORD }}
-      PICA_USERNAME: ${{ secrets.PICA_USERNAME }}
-      PICA_PASSWORD: ${{ secrets.PICA_PASSWORD }}
-      UMA_COOKIES: ${{ secrets.UMA_COOKIES }}
-      TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-      TG_USER_ID: ${{ secrets.TG_USER_ID }}
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
 
+      - name: 恢复签到成功记录缓存
+        id: cache-restore
+        uses: actions/cache@v6
+        with:
+          path: .last_success_date
+          key: last-success-marker-${{ github.repository }}
+
+      - name: 判断今天是否已签到
+        id: check
+        run: |
+          current_date=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
+          echo "当前北京时间: $current_date"
+          if [ -f .last_success_date ]; then
+            last_date=$(cat .last_success_date)
+            echo "上次签到日期: $last_date"
+            if [ "$last_date" = "$current_date" ]; then
+              echo "今天已成功签到，跳过执行。"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "今天尚未签到，继续执行。"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Set timezone
+        if: steps.check.outputs.skip == 'false'
         run: sudo timedatectl set-timezone 'Asia/Shanghai'
 
       - name: Echo current time
+        if: steps.check.outputs.skip == 'false'
         run: timedatectl
 
       - name: Install uv and Python 3.13
+        if: steps.check.outputs.skip == 'false'
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: '3.13'
 
       - name: Install dependencies
+        if: steps.check.outputs.skip == 'false'
         run: uv sync
 
       - name: Check-in
+        if: steps.check.outputs.skip == 'false'
+        env:
+          V2EX_COOKIES: ${{ secrets.V2EX_COOKIES }}
+          BILIBILI_COOKIES: ${{ secrets.BILIBILI_COOKIES }}
+          YAMIBO_COOKIES: ${{ secrets.YAMIBO_COOKIES }}
+          YURIFANS_EMAIL: ${{ secrets.YURIFANS_EMAIL }}
+          YURIFANS_PASSWORD: ${{ secrets.YURIFANS_PASSWORD }}
+          PICA_USERNAME: ${{ secrets.PICA_USERNAME }}
+          PICA_PASSWORD: ${{ secrets.PICA_PASSWORD }}
+          UMA_COOKIES: ${{ secrets.UMA_COOKIES }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_USER_ID: ${{ secrets.TG_USER_ID }}
         run: uv run python ./message.py
+
+      - name: 标记今天签到成功
+        if: success() && steps.check.outputs.skip == 'false'
+        run: |
+          date_str=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
+          echo "$date_str" > .last_success_date
+          echo "已记录成功签到日期: $date_str"
+
+      - name: 保存成功记录到缓存
+        if: success() && steps.check.outputs.skip == 'false'
+        uses: actions/cache@v6
+        with:
+          path: .last_success_date
+          key: last-success-marker-${{ github.repository }}
