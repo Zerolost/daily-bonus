@@ -17,7 +17,15 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .last_success_date
-          key: last-success-marker-${{ github.repository }}
+          key: last-success-marker
+
+      - name: 调试：打印缓存文件内容
+        run: |
+          if [ -f .last_success_date ]; then
+            echo "缓存文件存在，内容：$(cat .last_success_date)"
+          else
+            echo "缓存文件不存在"
+          fi
 
       - name: 判断今天是否已签到
         id: check
@@ -81,4 +89,4 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .last_success_date
-          key: last-success-marker-${{ github.repository }}
+          key: last-success-marker
