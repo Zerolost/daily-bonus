@@ -13,12 +13,12 @@ jobs:
     env:
       V2EX_COOKIES: ${{ secrets.V2EX_COOKIES }}
       BILIBILI_COOKIES: ${{ secrets.BILIBILI_COOKIES }}
-      YAMIBO_COOKIES: ${{ secrets.YAMIBO_COOKIES }}
-      YURIFANS_EMAIL: ${{ secrets.YURIFANS_EMAIL }}
-      YURIFANS_PASSWORD: ${{ secrets.YURIFANS_PASSWORD }}
+      YAMIBO_USERNAME: ${{ secrets.YAMIBO_USERNAME }}
+      YAMIBO_PASSWORD: ${{ secrets.YAMIBO_PASSWORD }}
       PICA_USERNAME: ${{ secrets.PICA_USERNAME }}
       PICA_PASSWORD: ${{ secrets.PICA_PASSWORD }}
       UMA_COOKIES: ${{ secrets.UMA_COOKIES }}
+      NETEASE_MUSIC_COOKIES: ${{ secrets.NETEASE_MUSIC_COOKIES }}
       TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
       TG_USER_ID: ${{ secrets.TG_USER_ID }}
 
@@ -26,8 +26,10 @@ jobs:
       - name: Checkout repo
         run: |
           rm -rf * .[!.]* 2>/dev/null
-          git clone --depth 1 https://github.com/${{ github.repository }}.git .
-          git checkout ${{ github.sha }}
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout FETCH_HEAD
 
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -41,10 +43,8 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Install Playwright browsers
+        run: uv run playwright install chromium
+
       - name: Check-in
-        run: |
-          for i in 1 2 3; do
-            uv run python ./message.py && exit 0
-            [ $i -lt 3 ] && echo "::warning::Attempt $i failed, retrying in 5s..." && sleep 5
-          done
-          exit 1
+        run: uv run python ./message.py

@@ -12,10 +12,24 @@ from datetime import datetime
 
 import requests
 
+from checkin import net
+
 # cookies
 COOKIES = os.environ.get("UMA_COOKIES")
 SESSION = requests.Session()
 msg = []
+
+# Extract only needed cookies
+NEEDED_KEYS = ["site", "joy_jct", "DedeUserID", "SESSDATA"]
+_cookie_parts = []
+if COOKIES:
+    for pair in COOKIES.split(";"):
+        pair = pair.strip()
+        for key in NEEDED_KEYS:
+            if pair.startswith(f"{key}="):
+                _cookie_parts.append(pair)
+                break
+COOKIES = "; ".join(_cookie_parts)
 
 # API constants
 ACTIVITY_GROUP_ID = "1755595320481626"
@@ -213,6 +227,9 @@ def main():
     if not COOKIES:
         return "No UMA_COOKIES set"
 
+    if not net.open_route(SESSION, f"{BASE_URL}/"):
+        return "无法连接网站"
+
     # Check status first
     status = get_status()
     if status == 1:
@@ -228,7 +245,8 @@ def main():
             if sign_time:
                 sign_str += f"（{sign_time}）"
             msg.append({"name": "本月签到", "value": sign_str})
-    elif status == 0:
+    else:
+        # Not signed or status unknown: the sign API is the source of truth
         result = check_in()
         if result.get("code") == 0:
             msg.append({"name": "签到信息", "value": "签到成功"})
@@ -245,8 +263,6 @@ def main():
                 msg.append({"name": "本月签到", "value": sign_str})
         else:
             msg.append({"name": "签到信息", "value": f'签到失败: {result.get("message", "unknown")}'})
-    else:
-        msg.append({"name": "签到信息", "value": "查询签到状态失败，Cookie 可能已失效"})
 
     # Query monthly record (if not already fetched)
     if "本月签到" not in [m["name"] for m in msg]:

@@ -7,13 +7,29 @@ import os
 import re
 import time
 
+from datetime import datetime, timedelta, timezone
+
 import requests
 from lxml import html
+
+from checkin import net
 
 # cookies
 COOKIES = os.environ.get("V2EX_COOKIES")
 SESSION = requests.Session()
 msg = []
+
+# Extract only needed cookies
+NEEDED_KEYS = ["PB3_SESSION", "A2", "V2EX_LANG", "V2EX_TAB"]
+_cookie_parts = []
+if COOKIES:
+    for pair in COOKIES.split(";"):
+        pair = pair.strip()
+        for key in NEEDED_KEYS:
+            if pair.startswith(f"{key}="):
+                _cookie_parts.append(pair)
+                break
+COOKIES = "; ".join(_cookie_parts)
 
 BASE_URL = "https://www.v2ex.com"
 
@@ -96,8 +112,8 @@ def query_balance():
 
     global msg
 
-    # Today's reward from transaction history (includes timestamp)
-    today = time.strftime("%Y%m%d")
+    # Today's reward from transaction history (V2EX dates rewards by Beijing time)
+    today = datetime.now(timezone(timedelta(hours=8))).strftime("%Y%m%d")
     reward_match = re.search(rf"{today} 的每日登录奖励 (\d+) 铜币", r.text)
     if reward_match:
         # Find the timestamp in the same table row (previous td)
@@ -130,6 +146,9 @@ def main():
     if not COOKIES:
         return "No V2EX_COOKIES set"
 
+    if not net.open_route(SESSION, f"{BASE_URL}/"):
+        return "无法连接网站"
+
     once, _, _ = get_once()
     if once:
         check_in(once)
@@ -157,14 +176,12 @@ def main():
                 m["value"] += reward_ts
                 break
 
-    # If check_in failed and no today's reward, the cookie may be expired
+    # If check_in failed and no today's reward, re-probe the mission page:
+    # the redeem response may be blocked by Cloudflare while the reward landed
     has_fail = any(m["name"] == "签到信息" and "失败" in m["value"] for m in msg)
     if has_fail and not has_reward:
-        # Check if already claimed today (mission page shows "已领取")
-        # This covers the case where CI runs close to midnight and the
-        # daily reset hasn't happened yet for V2EX's timezone
-        already = any(m["name"] == "登录信息" and "已领取" in m.get("value", "") for m in msg)
-        if already:
+        r = SESSION.get(f"{BASE_URL}/mission/daily", headers=HEADERS)
+        if "每日登录奖励已领取" in r.text:
             msg = [m for m in msg if not (m["name"] == "签到信息" and "失败" in m["value"])]
             msg.append({"name": "签到信息", "value": "今日已签到"})
         else:
