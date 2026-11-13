@@ -1,9 +1,13 @@
 name: Daily Bonus
 
 on:
-  schedule:
-    - cron: '30 23 * * *'
+  # 仅由外部定时（cron-job.org）通过 workflow_dispatch 触发，避免与内置 schedule 重复执行
   workflow_dispatch:
+
+# 同一时间只允许一个实例，防止外部定时与手动触发重叠
+concurrency:
+  group: daily-bonus-checkin
+  cancel-in-progress: false
 
 jobs:
   checkin:
@@ -28,22 +32,52 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v7
 
+      # 当日已成功则跳过，防止同一天被触发两次（外部定时 + 手动）
+      - name: 恢复上次成功日期
+        uses: actions/cache@v5
+        with:
+          path: .last_success_date
+          key: daily-bonus-${{ github.run_number }}
+          restore-keys: |
+            daily-bonus-
+
+      - name: 判断今日是否已签到
+        id: check
+        run: |
+          today=$(TZ='Asia/Shanghai' date '+%Y-%m-%d')
+          if [ -f .last_success_date ] && [ "$(cat .last_success_date)" = "$today" ]; then
+            echo "今日（$today）已成功签到，跳过。"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "今日（$today）尚未签到，继续。"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set timezone
+        if: steps.check.outputs.skip == 'false'
         run: sudo timedatectl set-timezone 'Asia/Shanghai'
 
       - name: Echo current time
         run: timedatectl
 
       - name: Install uv and Python 3.13
+        if: steps.check.outputs.skip == 'false'
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: '3.13'
 
       - name: Install dependencies
+        if: steps.check.outputs.skip == 'false'
         run: uv sync
 
       - name: Install Playwright browsers
+        if: steps.check.outputs.skip == 'false'
         run: uv run playwright install chromium --with-deps
 
       - name: Check-in
+        if: steps.check.outputs.skip == 'false'
         run: uv run python ./message.py
+
+      - name: 记录今日成功日期
+        if: success() && steps.check.outputs.skip == 'false'
+        run: TZ='Asia/Shanghai' date '+%Y-%m-%d' > .last_success_date
