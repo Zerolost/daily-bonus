@@ -1,8 +1,7 @@
 name: Daily Bonus (Self-hosted)
 
 on:
-  schedule:
-    - cron: '30 23 * * *'
+  # 未配置 self-hosted runner，停用自动触发；需要时手动运行
   workflow_dispatch:
 
 jobs:
